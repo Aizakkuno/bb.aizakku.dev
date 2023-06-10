@@ -1,7 +1,9 @@
+import random
 import string
 
 from flask import request
 from functools import wraps
+from database import db
 
 errors = {
     "bad_request": {"text": "Bad request!",
@@ -25,10 +27,34 @@ errors = {
                       "error": "{}_not_printable",
                       "status": 400},
 
+    "blocked_keywords": {"text": "Value for '{}' uses blocked keywords!",
+                         "error": "{}_blocked_keywords",
+                         "status": 400},
+
+    "exists": {"text": "Value for '{}' already exists/is taken!",
+               "error": "{}_exists",
+               "status": 409},
+
     # change to invalid template in future which uses args
-    "invalid_invite_secret": {"text": "Invalid invite secret!",
-                              "error": "invalid_invite_secret",
-                              "status": 401}
+    "invalid": {"text": "Value for '{}' does not exist!",
+                "error": "{}_invalid",
+                "status": 404},
+
+    "invalid_auth": {"text": ("Value for '{}' does not exist or could not be "
+                              "used to authenticate you!"),
+                    "error": "{}_invalid_auth",
+                    "status": 401},
+
+    "creation_ratelimit": {"text": ("You must wait {} minutes before "
+                                    "creating a new {}!"),
+                           "error": "{}_creation_ratelimit",
+                           "status": 429},
+
+    "invalid_discord_url": {"text": ("Discord URL must start with "
+                                     "'https://discord.gg/' or "
+                                     "'https://discord.com/invite/!'"),
+                            "error": "invalid_discord_url",
+                            "status": 400}
 }
 
 
@@ -46,6 +72,30 @@ def get_http_error(code, *args):
     response.pop("status")
 
     return response, status
+
+
+def generate_token():
+    return "".join(random.choices(string.ascii_letters + string.digits, k=64))
+
+
+def generate_invite_token():
+    token = generate_token()
+    while db.invites.find_one({"token": token}):
+        token = generate_token()
+
+    return token
+
+
+def generate_code():
+    return "".join(random.choices(string.ascii_letters + string.digits, k=6))
+
+
+def generate_invite_code():
+    code = generate_code()
+    while db.invites.find_one({"code": code}):
+        code = generate_code()
+
+    return code
 
 
 def json_key(key,
