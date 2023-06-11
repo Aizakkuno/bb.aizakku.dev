@@ -4,6 +4,7 @@ import string
 from flask import request
 from functools import wraps
 from database import db
+from copy import deepcopy
 
 errors = {
     "bad_request": {"text": "Bad request!",
@@ -45,24 +46,34 @@ errors = {
                     "error": "{}_invalid_auth",
                     "status": 401},
 
-    "creation_ratelimit": {"text": ("You must wait {} minutes before "
-                                    "creating a new {}!"),
+    "creation_ratelimit": {"text": ("You cannot create a new {} for {} more "
+                                    "minutes!"),
                            "error": "{}_creation_ratelimit",
                            "status": 429},
 
-    "invalid_discord_url": {"text": ("Discord URL must start with "
+    "invite_limit": {"text": ("You can only have one invite registered per "
+                              "server on each IP!"),
+                           "error": "invite_limit",
+                           "status": 409},
+
+    "discord_url_invalid": {"text": ("Discord URL must start with "
                                      "'https://discord.gg/' or "
-                                     "'https://discord.com/invite/!'"),
-                            "error": "invalid_discord_url",
+                                     "'https://discord.com/invite/'!"),
+                            "error": "discord_url_invalid",
                             "status": 400}
 }
 
 
 def format_json_template(response, *args):
+    new_response = {}
     for field in response.keys():
-        field = field.format(*args)
+        value = response[field]
+        if isinstance(value, str):
+            new_response[field] = value.format(*args)
+        else:
+            new_response[field] = value
 
-    return response
+    return new_response
 
 
 def get_http_error(code, *args):
@@ -180,3 +191,45 @@ def headers_key(key,
             return f(**{key: value}, **kwargs)
         return wrapper_function
     return wrapper
+
+
+def validate_key(value,
+                 key,
+                 min: int = 1,
+                 max: int = 4096,
+                 var_type: type = str,
+                 required: bool = True,
+                 printable: bool = True):
+
+    if not value and required:
+        return {"text": f"Please specify a value for '{key}'!",
+                "error": f"invalid_{key}"}, 400
+    elif not required:
+        value = value or None
+
+    if value:
+        if not isinstance(value, var_type):
+            try:
+                value = var_type(value)
+            except ValueError:
+                return {"text": (f"Value for '{key}' must be type "
+                                    f"{var_type.__name__}!"),
+                        "error": f"invalid_{key}"}, 400
+
+        if len(str(value)) < min:
+            return {"text": (f"Value for '{key}' must be at least "
+                                f"{min} characters!"),
+                    "error": f"invalid_{key}"}, 400
+
+        if len(str(value)) > max:
+            return {"text": (f"Value for '{key}' must be at most "
+                                f"{max} characters!"),
+                    "error": f"invalid_{key}"}, 400
+
+        if printable and isinstance(value, str):
+            for chr in value:
+                if chr not in string.printable:
+                    return {"text": f"Value for '{key}' uses invalid characters!",
+                            "error": f"invalid_{key}"}, 400
+
+    return True
