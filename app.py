@@ -74,7 +74,7 @@ def api_invite_create(discord_url, invite_code, bot_secret):
                 return get_http_error("not_printable", "invite_code")
             
         for keyword in blocked_keywords:
-            if keyword in invite_code:
+            if keyword in invite_code.lower():
                 return get_http_error("blocked_keywords", "invite_code")
         
         if db.invites.find_one({"code": invite_code}):
@@ -141,7 +141,7 @@ def api_invite_update(invite_token, discord_url, invite_code, bot_secret):
                 return get_http_error("not_printable", "invite_code")
             
         for keyword in blocked_keywords:
-            if keyword in invite_code:
+            if keyword in invite_code.lower():
                 return get_http_error("blocked_keywords", "invite_code")
         
         if db.invites.find_one({"code": invite_code}):
